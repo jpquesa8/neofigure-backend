@@ -1,23 +1,43 @@
 import requests
-from precios.materiales import MATERIALES
+from bs4 import BeautifulSoup
+from datetime import datetime
 
-URL_CAPRIS = "https://www.capris.cr/"
+from utils.archivos import guardar_precios
+
+URL = "https://www.capris.cr/es/catalog/category/view/id/19596"
 
 
-def obtener_precios():
-    resultados = {}
+def obtener_precio_pla():
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
-    for nombre, datos in MATERIALES.items():
-        resultados[nombre] = {
-            "busqueda": datos["busqueda"],
-            "unidad": datos["unidad"],
-            "precio": None,
-            "estado": "pendiente"
+    respuesta = requests.get(URL, headers=headers, timeout=20)
+    respuesta.raise_for_status()
+
+    soup = BeautifulSoup(respuesta.text, "html.parser")
+
+    texto = soup.get_text(" ", strip=True)
+
+    precio_detectado = "No encontrado"
+
+    for palabra in texto.split():
+        if "₡" in palabra:
+            precio_detectado = palabra
+            break
+
+    datos = {
+        "PLA": {
+            "precio_detectado": precio_detectado,
+            "fecha_actualizacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "fuente": "Capris"
         }
+    }
 
-    return resultados
+    guardar_precios(datos)
+
+    return datos
 
 
 if __name__ == "__main__":
-    precios = obtener_precios()
-    print(precios)
+    print(obtener_precio_pla())
