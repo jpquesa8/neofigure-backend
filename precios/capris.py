@@ -2,7 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 
-from utils.archivos import guardar_precios
+from modules.precios import guardar_precio, obtener_precio
+from modules.materiales import MATERIALES
 
 URL = "https://www.capris.cr/es/catalog/category/view/id/19596"
 
