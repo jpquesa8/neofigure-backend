@@ -7,6 +7,7 @@ DB_PATH = os.path.join(BASE_DIR, "database", "materiales.db")
 
 
 def conectar_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     return sqlite3.connect(DB_PATH)
 
 
