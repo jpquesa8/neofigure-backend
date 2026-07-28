@@ -19,6 +19,10 @@ def obtener_precio_pla():
 
         soup = BeautifulSoup(respuesta.text, "html.parser")
         texto = soup.get_text(" ", strip=True)
+        print("=== TEXTO DE LA PÁGINA ===")
+print(texto[:1000])
+print("\n=== HTML CRUD ===")
+print(soup.prettify()[:2000])
 
         precio_detectado = None
 
