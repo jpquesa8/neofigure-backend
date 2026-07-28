@@ -19,10 +19,11 @@ def obtener_precio_pla():
 
         soup = BeautifulSoup(respuesta.text, "html.parser")
         texto = soup.get_text(" ", strip=True)
+        
         print("=== TEXTO DE LA PÁGINA ===")
-print(texto[:1000])
-print("\n=== HTML CRUD ===")
-print(soup.prettify()[:2000])
+        print(texto[:1000])
+        print("\n=== HTML CRUD ===")
+        print(soup.prettify()[:2000])
 
         precio_detectado = None
 
@@ -35,33 +36,37 @@ print(soup.prettify()[:2000])
             respaldo = obtener_precio("PLA")
             return {
                 "PLA": {
-                    "precio_detectado": respaldo[1] if respaldo else None,
+                    "precio_detectado": None,
                     "fecha_actualizacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "fuente": "Capris",
-                    "estado": "usando_respaldo" if respaldo else "sin_datos"
+                    "estado": "usando_respaldo" if respaldo else "error_sin_respaldo"
                 }
             }
 
-        precio_numero = float(precio_detectado)
-        guardar_precio("PLA", precio_numero, MATERIALES["PLA"]["unidad"], "Capris")
+        guardar_precio(
+            "PLA",
+            float(precio_detectado),
+            MATERIALES["PLA"]["unidad"],
+            "Capris"
+        )
 
         return {
             "PLA": {
-                "precio_detectado": precio_numero,
+                "precio_detectado": float(precio_detectado),
                 "fecha_actualizacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "fuente": "Capris",
-                "estado": "actualizado"
+                "fuente": "Capris"
             }
         }
 
-    except Exception:
+    except Exception as e:
         respaldo = obtener_precio("PLA")
         return {
             "PLA": {
-                "precio_detectado": respaldo[1] if respaldo else None,
+                "precio_detectado": None,
                 "fecha_actualizacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "fuente": "Capris",
-                "estado": "error_usando_respaldo" if respaldo else "error_sin_respaldo"
+                "estado": f"error_{str(e)}",
+                "tiene_respaldo": bool(respaldo)
             }
         }
 
