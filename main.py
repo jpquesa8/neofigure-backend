@@ -1,6 +1,16 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-app = FastAPI()
+from modules.precios import inicializar
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Código al iniciar
+    inicializar()
+    yield
+    # Código al cerrar (vacío por ahora)
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def inicio():
