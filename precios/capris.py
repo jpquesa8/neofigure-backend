@@ -10,11 +10,17 @@ from modules.materiales import MATERIALES
 # URLs de búsqueda por código (SKU) en Capris (Magento)
 BASE_URL = "https://www.capris.cr/es/catalogsearch/result/"
 
-# Lista de códigos de productos PLA
+# Lista de códigos de productos PLA estándar
 CODIGOS_PLA = [
     "075556",  # CREALITY PLA negro 1kg
     "070130",  # DREMEL PLA oro
     "075680",  # CREALITY Hyper PLA café
+]
+
+# Lista de códigos de productos PLA Silk (si luego quieres agregar códigos específicos)
+# Por ahora dejamos vacío o con un código ejemplo si lo llegas a tener.
+CODIGOS_PLA_SILK: List[str] = [
+    # Ejemplo: "XXXXXX",  # PLA Silk XXX
 ]
 
 # Lista de códigos de productos PETG
@@ -22,9 +28,9 @@ CODIGOS_PETG = [
     "075630",  # CREALITY PETG rojo 1kg
 ]
 
-# Lista de códigos de resinas
-CODIGOS_RESINA = [
-    "075648",  # Resina rígida verde
+# Lista de códigos de resinas UV
+CODIGOS_RESINA_UV = [
+    "075648",  # Resina rígida verde (puede usarse como UV genérica)
     "075690",  # Resina lavable gris
     "075689",  # Resina lavable blanca
 ]
@@ -41,11 +47,6 @@ TIMEOUT = 15
 def _extraer_precio_texto(texto: str) -> Optional[float]:
     """
     Extrae un precio numérico de un string que puede venir con símbolo ₡, comas, etc.
-    Ejemplos:
-      - "₡3,898.50"
-      - "3,898.50"
-      - "CRC3898.50"
-    Devuelve float o None si no hay número válido.
     """
     if not texto:
         return None
@@ -55,7 +56,6 @@ def _extraer_precio_texto(texto: str) -> Optional[float]:
     if not texto_limpio:
         return None
 
-    # Estrategia simple: si hay más de un separador, asumimos que el último es el decimal
     n_puntos = texto_limpio.count(".")
     n_comas = texto_limpio.count(",")
 
@@ -65,7 +65,6 @@ def _extraer_precio_texto(texto: str) -> Optional[float]:
         except ValueError:
             return None
 
-    # Si hay ambos, usamos el último separador como decimal
     if n_puntos > 0 and n_comas > 0:
         if texto_limpio.rfind(".") > texto_limpio.rfind(","):
             texto_limpio = texto_limpio.replace(",", "")
@@ -78,7 +77,6 @@ def _extraer_precio_texto(texto: str) -> Optional[float]:
         except ValueError:
             return None
 
-    # Solo un tipo de separador
     texto_limpio = texto_limpio.replace(",", ".")
     try:
         return float(texto_limpio)
@@ -89,14 +87,6 @@ def _extraer_precio_texto(texto: str) -> Optional[float]:
 def _buscar_producto_por_codigo(codigo: str) -> Optional[Dict[str, Any]]:
     """
     Busca un producto en Capris por código (SKU).
-    Devuelve:
-      {
-          "nombre": str,
-          "precio": float,
-          "url": str,
-          "codigo": str,
-      }
-    o None si no se encuentra precio válido.
     """
     params = {"q": codigo}
     try:
@@ -107,7 +97,6 @@ def _buscar_producto_por_codigo(codigo: str) -> Optional[Dict[str, Any]]:
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Ajusta selectores si ves que Capris usa otros nombres de clase
     for item in soup.select(".product-item, .product-item-info"):
         nombre_el = item.select_one(
             ".product-item-link, .product-name a, a.product-item-link"
@@ -138,16 +127,15 @@ def _buscar_producto_por_codigo(codigo: str) -> Optional[Dict[str, Any]]:
                 "codigo": codigo,
             }
 
-    # No se encontró precio en HTML crudo
     return None
 
 
 def obtener_precios_por_codigos(
     codigos: List[str],
-    nombre_material: str,
+    clave_material: str,
 ) -> Dict[str, Any]:
     """
-    Obtiene precios para una lista de códigos asociados a un material (PLA, PETG, resina, etc.).
+    Obtiene precios para una lista de códigos asociados a un material (PLA, PETG, etc.).
     Guarda en SQLite el primer precio válido que encuentre y devuelve información detallada.
     """
     precio_detectado: Optional[float] = None
@@ -174,11 +162,11 @@ def obtener_precios_por_codigos(
 
     fecha_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Si no se obtuvo precio, usar respaldo de SQLite
+    # Si no hay códigos definidos o no se obtuvo precio, usar respaldo
     if precio_detectado is None:
-        respaldo = obtener_precio(nombre_material)
+        respaldo = obtener_precio(clave_material)
         return {
-            "material": nombre_material,
+            "material": clave_material,
             "precio_detectado": None,
             "fecha_actualizacion": fecha_actualizacion,
             "fuente": "Capris",
@@ -187,16 +175,17 @@ def obtener_precios_por_codigos(
             "codigos_revisados": detalles_codigos,
         }
 
-    # Guardar precio en SQLite
+    unidad = obtener_unidad(clave_material)
+
     guardar_precio(
-        nombre_material,
+        clave_material,
         precio_detectado,
-        MATERIALES[nombre_material]["unidad"],
+        unidad,
         "Capris"
     )
 
     return {
-        "material": nombre_material,
+        "material": clave_material,
         "precio_detectado": precio_detectado,
         "fecha_actualizacion": fecha_actualizacion,
         "fuente": "Capris",
@@ -208,43 +197,37 @@ def obtener_precios_por_codigos(
 
 
 def obtener_precio_pla() -> Dict[str, Any]:
-    """
-    Obtiene precio de PLA desde Capris usando búsqueda por código (SKU).
-    """
     return obtener_precios_por_codigos(CODIGOS_PLA, "PLA")
 
 
+def obtener_precio_pla_silk() -> Dict[str, Any]:
+    return obtener_precios_por_codigos(CODIGOS_PLA_SILK, "PLA_SILK")
+
+
 def obtener_precio_petg() -> Dict[str, Any]:
-    """
-    Obtiene precio de PETG desde Capris usando búsqueda por código (SKU).
-    """
     return obtener_precios_por_codigos(CODIGOS_PETG, "PETG")
 
 
-def obtener_precio_resina() -> Dict[str, Any]:
-    """
-    Obtiene precio de resina desde Capris usando búsqueda por código (SKU).
-    Usa el primer código de resina como referencia para el precio.
-    """
-    return obtener_precios_por_codigos(CODIGOS_RESINA, "RESINA")
+def obtener_precio_resina_uv() -> Dict[str, Any]:
+    return obtener_precios_por_codigos(CODIGOS_RESINA_UV, "RESINA_UV")
 
 
 def obtener_todos_los_precios() -> Dict[str, Any]:
     """
-    Obtiene precios para todos los materiales configurados (PLA, PETG, resina).
-    Devuelve un diccionario con los resultados de cada uno.
+    Obtiene precios para todos los materiales configurados.
     """
     resultados = {}
 
     resultados["PLA"] = obtener_precio_pla()
+    resultados["PLA_SILK"] = obtener_precio_pla_silk()
     resultados["PETG"] = obtener_precio_petg()
-    resultados["RESINA"] = obtener_precio_resina()
+    resultados["RESINA_UV"] = obtener_precio_resina_uv()
 
     return resultados
 
 
 if __name__ == "__main__":
-    # Prueba con todos los materiales
     import json
     resultados = obtener_todos_los_precios()
     print(json.dumps(resultados, indent=2, ensure_ascii=False))
+    
