@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from modules.precios import guardar_precio, obtener_precio
-from modules.materiales import MATERIALES, obtener_unidad  # ← agregar obtener_unidad
+from modules.materiales import MATERIALES, obtener_unidad
 
 # URLs de búsqueda por código (SKU) en Capris (Magento)
 BASE_URL = "https://www.capris.cr/es/catalogsearch/result/"
