@@ -1,3 +1,4 @@
+import re
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -9,11 +10,23 @@ from modules.materiales import MATERIALES
 # URLs de búsqueda por código (SKU) en Capris (Magento)
 BASE_URL = "https://www.capris.cr/es/catalogsearch/result/"
 
-# Lista de códigos de productos PLA (y otros) que quieres monitorear.
-# Empieza con al menos un PLA real.
+# Lista de códigos de productos PLA
 CODIGOS_PLA = [
     "075556",  # CREALITY PLA negro 1kg
-    # Puedes agregar más códigos PLA si los consigues
+    "070130",  # DREMEL PLA oro
+    "075680",  # CREALITY Hyper PLA café
+]
+
+# Lista de códigos de productos PETG
+CODIGOS_PETG = [
+    "075630",  # CREALITY PETG rojo 1kg
+]
+
+# Lista de códigos de resinas
+CODIGOS_RESINA = [
+    "075648",  # Resina rígida verde
+    "075690",  # Resina lavable gris
+    "075689",  # Resina lavable blanca
 ]
 
 HEADERS = {
@@ -34,7 +47,6 @@ def _extraer_precio_texto(texto: str) -> Optional[float]:
       - "CRC3898.50"
     Devuelve float o None si no hay número válido.
     """
-    import re
     if not texto:
         return None
 
@@ -130,56 +142,109 @@ def _buscar_producto_por_codigo(codigo: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def obtener_precio_pla():
+def obtener_precios_por_codigos(
+    codigos: List[str],
+    nombre_material: str,
+) -> Dict[str, Any]:
     """
-    Obtiene precio de PLA desde Capris usando búsqueda por código (SKU).
-    Si no logra obtener ningún precio, usa el respaldo de SQLite.
+    Obtiene precios para una lista de códigos asociados a un material (PLA, PETG, resina, etc.).
+    Guarda en SQLite el primer precio válido que encuentre y devuelve información detallada.
     """
     precio_detectado: Optional[float] = None
     codigo_usado: Optional[str] = None
     nombre_producto: Optional[str] = None
+    url_producto: Optional[str] = None
+    detalles_codigos: List[Dict[str, Any]] = []
 
-    for codigo in CODIGOS_PLA:
+    for codigo in codigos:
         info = _buscar_producto_por_codigo(codigo)
-        if info:
+        registro = {
+            "codigo": codigo,
+            "encontrado": bool(info),
+            "precio": info["precio"] if info else None,
+            "nombre": info["nombre"] if info else None,
+        }
+        detalles_codigos.append(registro)
+
+        if info and precio_detectado is None:
             precio_detectado = info["precio"]
             codigo_usado = codigo
             nombre_producto = info["nombre"]
-            break  # tomamos el primer PLA con precio válido
+            url_producto = info["url"]
 
     fecha_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Si no se obtuvo precio, usar respaldo
+    # Si no se obtuvo precio, usar respaldo de SQLite
     if precio_detectado is None:
-        respaldo = obtener_precio("PLA")
+        respaldo = obtener_precio(nombre_material)
         return {
-            "PLA": {
-                "precio_detectado": None,
-                "fecha_actualizacion": fecha_actualizacion,
-                "fuente": "Capris",
-                "estado": "usando_respaldo" if respaldo else "error_sin_respaldo",
-                "codigo_intentado": CODIGOS_PLA[0] if CODIGOS_PLA else None,
-            }
+            "material": nombre_material,
+            "precio_detectado": None,
+            "fecha_actualizacion": fecha_actualizacion,
+            "fuente": "Capris",
+            "estado": "usando_respaldo" if respaldo else "error_sin_respaldo",
+            "tiene_respaldo": bool(respaldo),
+            "codigos_revisados": detalles_codigos,
         }
 
     # Guardar precio en SQLite
     guardar_precio(
-        "PLA",
+        nombre_material,
         precio_detectado,
-        MATERIALES["PLA"]["unidad"],
+        MATERIALES[nombre_material]["unidad"],
         "Capris"
     )
 
     return {
-        "PLA": {
-            "precio_detectado": precio_detectado,
-            "fecha_actualizacion": fecha_actualizacion,
-            "fuente": "Capris",
-            "codigo_usado": codigo_usado,
-            "nombre_producto": nombre_producto,
-        }
+        "material": nombre_material,
+        "precio_detectado": precio_detectado,
+        "fecha_actualizacion": fecha_actualizacion,
+        "fuente": "Capris",
+        "codigo_usado": codigo_usado,
+        "nombre_producto": nombre_producto,
+        "url_producto": url_producto,
+        "codigos_revisados": detalles_codigos,
     }
 
 
+def obtener_precio_pla() -> Dict[str, Any]:
+    """
+    Obtiene precio de PLA desde Capris usando búsqueda por código (SKU).
+    """
+    return obtener_precios_por_codigos(CODIGOS_PLA, "PLA")
+
+
+def obtener_precio_petg() -> Dict[str, Any]:
+    """
+    Obtiene precio de PETG desde Capris usando búsqueda por código (SKU).
+    """
+    return obtener_precios_por_codigos(CODIGOS_PETG, "PETG")
+
+
+def obtener_precio_resina() -> Dict[str, Any]:
+    """
+    Obtiene precio de resina desde Capris usando búsqueda por código (SKU).
+    Usa el primer código de resina como referencia para el precio.
+    """
+    return obtener_precios_por_codigos(CODIGOS_RESINA, "RESINA")
+
+
+def obtener_todos_los_precios() -> Dict[str, Any]:
+    """
+    Obtiene precios para todos los materiales configurados (PLA, PETG, resina).
+    Devuelve un diccionario con los resultados de cada uno.
+    """
+    resultados = {}
+
+    resultados["PLA"] = obtener_precio_pla()
+    resultados["PETG"] = obtener_precio_petg()
+    resultados["RESINA"] = obtener_precio_resina()
+
+    return resultados
+
+
 if __name__ == "__main__":
-    print(obtener_precio_pla())
+    # Prueba con todos los materiales
+    import json
+    resultados = obtener_todos_los_precios()
+    print(json.dumps(resultados, indent=2, ensure_ascii=False))
