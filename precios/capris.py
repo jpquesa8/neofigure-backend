@@ -92,6 +92,15 @@ def _buscar_producto_por_codigo(codigo: str) -> Optional[Dict[str, Any]]:
     try:
         resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=TIMEOUT)
         resp.raise_for_status()
+          # === DIAGNÓSTICO TEMPORAL ===
+        print(f"[DEBUG] Código: {codigo}")
+        print(f"[DEBUG] Status: {resp.status_code}")
+        print(f"[DEBUG] URL final: {resp.url}")
+        print(f"[DEBUG] Primeros 800 caracteres del HTML:")
+        print(resp.text[:800])
+        print("[DEBUG] -----------------------------")
+        # =============================
+
     except Exception:
         return None
 
